@@ -10,3 +10,5 @@ const content = `Status: ${status}\nBranch: ${branch}\nTime: ${timestamp}`;
 fs.writeFileSync(path.join(__dirname, 'report.txt'), content);
 
 console.log('Report saved as report.txt');
+
+// test
