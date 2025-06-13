@@ -1,0 +1,13 @@
+{
+    "name": "ci-cd-demo",
+    "version": "1.0.0",
+    "scripts": {
+        "test": "jest",
+        "lint": "eslint src/",
+        "start": "node src/functions.js"
+    },
+    "devDependencies": {
+        "jest": "^29.0.0",
+        "eslint": "^8.0.0"
+    }
+}

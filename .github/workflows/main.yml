@@ -1,0 +1,104 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  # 🧪 Etap A: Testy jednostkowe
+  test:
+    runs-on: ubuntu-latest
+    if: github.ref != 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Instalacja zależności
+        run: npm install
+
+      - name: Uruchom testy
+        run: npm test
+
+  # 🔍 Etap A: Linting
+  lint:
+    runs-on: ubuntu-latest
+    if: github.ref != 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Instalacja zależności
+        run: npm install
+
+      - name: Uruchom lint
+        run: npm run lint
+
+  # 🐳 Etap B: Budowanie obrazu i udostępnienie jako artefakt
+  build:
+    runs-on: ubuntu-latest
+    needs: [test, lint]
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Instalacja zależności
+        run: npm install
+
+      - name: Buduj obraz Docker
+        run: docker build -t myapp:latest .
+
+      - name: Zapisz obraz jako artefakt
+        run: docker save myapp:latest -o image.tar
+
+      - name: Upload artefaktu
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: image.tar
+
+  # 🚧 Etap C: Wdrożenie staging z akceptacją
+  deploy-staging:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    environment:
+      name: staging
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Symulacja wdrożenia na staging
+        run: echo "Wdrażanie aplikacji na środowisko STAGING..."
+
+  # 🚀 Etap D: Produkcja po zatwierdzeniu stagingu
+  deploy-prod:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs: deploy-staging
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Buduj i wypchnij obraz na Docker Hub (bez logowania)
+        run: |
+          docker build -t blezzy/ci-cd-demo:latest .
+          docker push blezzy/ci-cd-demo:latest || echo "Push może się nie udać bez logowania – to normalne"
+
+  # 📄 Etap E: Zawsze generuj raport
+  report:
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [test, lint, build, deploy-staging, deploy-prod]
+    env:
+      PIPELINE_STATUS: ${{ job.status }}
+      GITHUB_REF: ${{ github.ref }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Instalacja zależności
+        run: npm install
+
+      - name: Generowanie raportu
+        run: node report-generator.js
+
+      - name: Upload raportu
+        uses: actions/upload-artifact@v4
+        with:
+          name: raport
+          path: report.txt
