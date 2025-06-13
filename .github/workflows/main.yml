@@ -4,98 +4,102 @@ on:
   push:
     branches:
       - '**'
+  workflow_dispatch:
 
 jobs:
-  # 🧪 Etap A: Testy jednostkowe
+  # 🧪 Etap A1: Testy jednostkowe (tylko nie-main)
   test:
     runs-on: ubuntu-latest
     if: github.ref != 'refs/heads/main'
     steps:
       - uses: actions/checkout@v3
-
       - name: Instalacja zależności
         run: npm install
-
       - name: Uruchom testy
         run: npm test
 
-  # 🔍 Etap A: Linting
+  # 🔍 Etap A2: Linting (tylko nie-main)
   lint:
     runs-on: ubuntu-latest
     if: github.ref != 'refs/heads/main'
     steps:
       - uses: actions/checkout@v3
-
       - name: Instalacja zależności
         run: npm install
-
       - name: Uruchom lint
         run: npm run lint
 
-  # 🐳 Etap B: Budowanie obrazu i udostępnienie jako artefakt
+  # 🐳 Etap B: Budowanie obrazu i udostępnienie artefaktu
   build:
     runs-on: ubuntu-latest
     needs: [test, lint]
     steps:
       - uses: actions/checkout@v3
-
       - name: Instalacja zależności
         run: npm install
-
       - name: Buduj obraz Docker
-        run: docker build -t myapp:latest .
-
+        run: docker build -t myapp:${{ github.sha }} .
       - name: Zapisz obraz jako artefakt
-        run: docker save myapp:latest -o image.tar
-
+        run: docker save myapp:${{ github.sha }} -o image.tar
       - name: Upload artefaktu
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: docker-image
           path: image.tar
 
-  # 🚧 Etap C: Wdrożenie staging z akceptacją
+  # 🚧 Etap C: Deploy na Staging z ręczną akceptacją
   deploy-staging:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
     needs: build
-    environment:
-      name: staging
+    if: github.ref == 'refs/heads/main'
+    environment: staging
     steps:
       - uses: actions/checkout@v3
+      - name: Pobierz artefakt
+        uses: actions/download-artifact@v3
+        with:
+          name: docker-image
+          path: .
+      - name: Wypakuj obraz
+        run: docker load -i image.tar
+      - name: Symulacja deployu na STAGING
+        run: echo "Deployuję na STAGING..."
 
-      - name: Symulacja wdrożenia na staging
-        run: echo "Wdrażanie aplikacji na środowisko STAGING..."
-
-  # 🚀 Etap D: Produkcja po zatwierdzeniu stagingu
+  # 🚀 Etap D: Deploy na Produkcję po akceptacji stagingu
   deploy-prod:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
     needs: deploy-staging
+    if: github.ref == 'refs/heads/main'
+    environment: production
     steps:
       - uses: actions/checkout@v3
-
-      - name: Buduj i wypchnij obraz na Docker Hub (bez logowania)
+      - name: Pobierz artefakt
+        uses: actions/download-artifact@v3
+        with:
+          name: docker-image
+          path: .
+      - name: Wypakuj obraz
+        run: docker load -i image.tar
+      - name: Push do Docker Hub
         run: |
-          docker build -t szyban/ci-cd-demo:latest .
-          docker push szyban/ci-cd-demo:latest || echo "Push może się nie udać bez logowania – to normalne"
+          docker tag myapp:${{ github.sha }} szyban/myapp:latest
+          docker push szyban/myapp:latest
 
-  # 📄 Etap E: Zawsze generuj raport
+  # 📄 Etap E: Raport końcowy (zawsze)
   report:
     runs-on: ubuntu-latest
-    if: always()
     needs: [test, lint, build, deploy-staging, deploy-prod]
+    if: always()
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Instalacja zależności
-        run: npm install
-
       - name: Generowanie raportu
-        run: node report-generator.js
-
+        run: |
+          echo "Testy:       $([[ '${{ needs.test.result }}' == 'success' ]] && echo OK || echo FAIL)"        > report.txt
+          echo "Lint:        $([[ '${{ needs.lint.result }}' == 'success' ]] && echo OK || echo FAIL)"        >> report.txt
+          echo "Build:       $([[ '${{ needs.build.result }}' == 'success' ]] && echo OK || echo FAIL)"        >> report.txt
+          echo "Staging:     $([[ '${{ needs.deploy-staging.result }}' == 'success' ]] && echo OK || echo SKIPPED/FAIL)" >> report.txt
+          echo "Production:  $([[ '${{ needs.deploy-prod.result }}' == 'success' ]] && echo OK || echo SKIPPED/FAIL)"   >> report.txt
       - name: Upload raportu
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
-          name: raport
+          name: report
           path: report.txt
