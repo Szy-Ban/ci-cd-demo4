@@ -6,5 +6,5 @@ npm-debug.log
 # Raport z pipeline’u
 report.txt
 
-# ESLint cache
+# ESLint cachee
 .eslintcache
