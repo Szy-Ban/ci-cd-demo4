@@ -42,7 +42,7 @@ jobs:
       - name: Zapisz obraz jako artefakt
         run: docker save myapp:${{ github.sha }} -o image.tar
       - name: Upload artefaktu
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: docker-image
           path: image.tar
@@ -85,21 +85,34 @@ jobs:
           docker tag myapp:${{ github.sha }} szyban/myapp:latest
           docker push szyban/myapp:latest
 
-  # 📄 Etap E: Raport końcowy (zawsze)
+  # 📄 Etap E: Raport końcowy – Uruchamiamy report-generator.js
   report:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     needs: [test, lint, build, deploy-staging, deploy-prod]
     if: always()
     steps:
-      - name: Generowanie raportu
-        run: |
-          echo "Testy:       $([[ '${{ needs.test.result }}' == 'success' ]] && echo OK || echo FAIL)"        > report.txt
-          echo "Lint:        $([[ '${{ needs.lint.result }}' == 'success' ]] && echo OK || echo FAIL)"        >> report.txt
-          echo "Build:       $([[ '${{ needs.build.result }}' == 'success' ]] && echo OK || echo FAIL)"        >> report.txt
-          echo "Staging:     $([[ '${{ needs.deploy-staging.result }}' == 'success' ]] && echo OK || echo SKIPPED/FAIL)" >> report.txt
-          echo "Production:  $([[ '${{ needs.deploy-prod.result }}' == 'success' ]] && echo OK || echo SKIPPED/FAIL)"   >> report.txt
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Instalacja zależności
+        run: npm install
+
+      - name: Generuj raport
+        env:
+          JOB_TEST:    ${{ needs.test.result }}
+          JOB_LINT:    ${{ needs.lint.result }}
+          JOB_BUILD:   ${{ needs.build.result }}
+          JOB_STAGING: ${{ needs.deploy-staging.result }}
+          JOB_PROD:    ${{ needs.deploy-prod.result }}
+          GITHUB_REF:  ${{ github.ref }}
+        run: node report-generator.js
+
       - name: Upload raportu
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: report
           path: report.txt
