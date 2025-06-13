@@ -77,17 +77,14 @@ jobs:
 
       - name: Buduj i wypchnij obraz na Docker Hub (bez logowania)
         run: |
-          docker build -t blezzy/ci-cd-demo:latest .
-          docker push blezzy/ci-cd-demo:latest || echo "Push może się nie udać bez logowania – to normalne"
+          docker build -t szyban/ci-cd-demo:latest .
+          docker push szyban/ci-cd-demo:latest || echo "Push może się nie udać bez logowania – to normalne"
 
   # 📄 Etap E: Zawsze generuj raport
   report:
     runs-on: ubuntu-latest
     if: always()
     needs: [test, lint, build, deploy-staging, deploy-prod]
-    env:
-      PIPELINE_STATUS: ${{ job.status }}
-      GITHUB_REF: ${{ github.ref }}
     steps:
       - uses: actions/checkout@v3
 
